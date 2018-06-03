@@ -1,0 +1,193 @@
+<html>
+  <head>
+    <meta name="viewport" content="user-scalable=no, initial-scale=1.0">
+    <script src="<<<.CdnPrefix>>>/js/jquery.min.js"></script>
+    <script src="<<<.CdnPrefix>>>/js/vue.min.js"></script>
+    <script src="<<<.CdnPrefix>>>/js/dashboard.min.js"></script>
+    <script src="https://js.stripe.com/v3/"></script>
+    <link rel="stylesheet" href="/stylesheets/account.css">
+    <link rel="stylesheet" href="/stylesheets/dashboard.css">
+    <link href="https://fonts.googleapis.com/css?family=Source+Code+Pro:400,700|Source+Sans+Pro:200,300,400,700" rel="stylesheet">
+    <title>Commento: Dashboard</title>
+  </head>
+
+  <div id="navbar" class="navbar">
+    <a href="/" class="navbar-item navbar-logo-text"><img src="/images/logo.svg" class="navbar-logo">Commento</a>
+    <div class="navbar-item float-right">
+      <a href="/logout" class="navbar-item">Logout</a>
+      <a href="/dashboard" class="navbar-item">Dashboard</a>
+      <b>{{name}}</b>
+    </div>
+  </div>
+
+  <div class="subscription-nag" id="subscription" style="display: none">
+    Your trial ends in {{days}} days. Subscribe now.
+  </div>
+
+  <script>
+  window.onload = function() {
+    window.selfGet(function() {
+      window.navbarFill();
+      window.fillAccount();
+    });
+
+    window.addCard = function() {
+      window.account.$data.haveCard = false;
+
+      setTimeout(function() {
+        $("#add-card").remove();
+        $("#payment-form").show();
+
+        window.stripe = Stripe('pk_test_IbH4DmGS4pOsjEJ3GykZAdJS');
+
+        window.elements = stripe.elements();
+
+        var style = {
+          base: {
+            color: '#32325d',
+            lineHeight: '18px',
+            fontSmoothing: 'antialiased',
+            fontSize: '16px',
+            '::placeholder': {
+              color: '#aab7c4'
+            }
+          },
+          invalid: {
+            color: '#fa755a',
+            iconColor: '#fa755a'
+          }
+        };
+
+        window.card = window.elements.create('card', {style: style});
+
+        window.card.mount('#card-element');
+
+        window.card.addEventListener('change', function(event) {
+          var displayError = document.getElementById('card-errors');
+          if (event.error) {
+            displayError.textContent = event.error.message;
+          } else {
+            displayError.textContent = '';
+          }
+        });
+
+        window.handleCard = function() {
+          window.stripe.createToken(window.card).then(function(result) {
+            if (result.error) {
+              var errorElement = document.getElementById('card-errors');
+              errorElement.textContent = result.error.message;
+            } else {
+              window.addToken(result.token);
+            }
+          });
+        };
+      }, 300);
+    };
+  };
+  </script>
+
+  <div class="global-error" id="global-error"></div>
+  <div class="global-ok" id="global-ok"></div>
+
+  <div id="settings" class="settings-container">
+    <div class="settings">
+      <div class="content">
+        <div class="box">
+          <div class="box-title">
+            Payment Information
+          </div>
+          <div class="box-subtitle">
+            Add or update your credit card information. Commento uses <a href="https://stripe.com">Stripe</a> to securely handle payment; your card details will never touch our servers.
+          </div>
+          <div class="card-container">
+            <div v-if="haveCard" class="card">
+              <div style="text-align: center; margin: 12px;">There's a card associated with your account.</div>
+              <div class="email-container">
+                <div class="email">
+                  <input class="input" type="text" id="card" :value="card" disabled>
+                  <button id="new-mod-button" class="email-button" onclick="addCard()">Change Card</button>
+                </div>
+              </div>
+            </div>
+            <div v-if="!haveCard" class="card">
+              <div style="display: flex; justify-content: center">
+                <button id="add-card" class="button green-button" style="border: none; margin-top: 8px;" onclick="addCard()">Add Card</button>
+              </div>
+              <form action="/charge" method="post" id="payment-form" onsubmit="return false;" style="display: none">
+                <div class="form-row">
+                  <div id="card-element"></div>
+                  <div id="card-errors" role="alert"></div>
+                </div>
+
+                <button class="button green-button" style="border: none; margin-top: 8px; float: right;" onclick="this.disabled = 'disabled'; this.innerText = 'Loading...'; window.handleCard();">Add Card</button>
+                <br><br>
+              </form>
+            </div>
+          </div>
+        </div>
+        <div class="part-container">
+          <div v-bind:class="{hideout: !haveCard}">
+            <div class="box" v-bind:class="{prevent: !haveCard}">
+              <div class="box-title">
+                Choose your Plan
+              </div>
+              <div class="box-subtitle">
+                Check out <a href="/pricing">the list of features</a> in each plan and choose the plan that's perfect for you. In case you're changing plans, we use proration to calculate the correct amount you should be charged.
+              </div>
+              <div class="chooser">
+                <div class="trial-container" v-if="plan == 'trial'">
+                  <div class="trial">
+                    You're currently on our trial plan.
+                  </div>
+                </div>
+                <div class="trial-container" v-if="goingDown">
+                  <div class="warning">
+                    <b>Warning:</b> Downgrading your plan will turn off all {{originalPlan}} features.
+                  </div>
+                </div>
+                <div class="plans-container">
+                  <div class="plan" id="personal" onclick="selectPlan('personal')">
+                    <div class="price">9<sup>99</sup></div>
+                    <div class="plan-title">Personal</div>
+                  </div>
+                  <div class="plan" id="pro" onclick="selectPlan('pro')">
+                    <div class="price">99</div>
+                    <div class="plan-title">Pro</div>
+                  </div>
+                  <div class="plan" id="business" onclick="selectPlan('business')">
+                    <div class="price">999</div>
+                    <div class="plan-title">Business</div>
+                  </div>
+                </div>
+                <div style="display: flex; justify-content: center" v-if="window.owner.changedPlan">
+                  <button id="set-plan-button" class="button" onclick="this.disabled = 'disabled'; this.innerText = 'Processing...'; window.changePlan();">Set Plan</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div v-if="!haveCard" class="add-card-nag"></div>
+        </div>
+        <!-- Not ready yet
+        <div class="box" id="click-here">
+          <div class="box-subtitle gray">Looking to delete your account? <a href="#" onclick="$('#delete-box').show(); $('#click-here').remove();">Click here.</a></div>
+        </div>
+        <div class="part-container" id="delete-box" style="display: none">
+          <div class="box">
+            <div class="box-title">
+              Delete your Commento account
+            </div>
+            <div class="box-subtitle">
+              We hate to see you leave, but if you want to delete your Commento and cancel your subscription/trial, you can. Doing so will irreversibly delete all data &mdash; your domains, all comments in every domain, all data associated with each comment (such as voting data, view logs), moderation logs, moderator lists, and so on. Are you absolutely sure you want to delete your account?
+            </div>
+            <div class="chooser">
+              <div style="display: flex; justify-content: center">
+                <button class="button big-red-button" v-on:click="window.delete()">Delete Account</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        -->
+      </div>
+    </div>
+  </div>
+</html>
